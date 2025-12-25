@@ -48,10 +48,16 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <!-- 選擇標的 -->
             <div class="lg:col-span-2">
-                <label for="future-select" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="future-search" class="block text-sm font-medium text-gray-700 mb-1">
                     股票期貨標的
                 </label>
-                <select id="future-select" class="input-field mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm">
+                <div class="relative">
+                    <input type="text" id="future-search" placeholder="搜尋期貨 (名稱/代碼/股票代碼)" class="input-field mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm">
+                    <div id="search-dropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-64 overflow-y-auto">
+                        <!-- 搜尋結果將動態填充在此 -->
+                    </div>
+                </div>
+                <select id="future-select" class="hidden">
                     <option value="">請選擇期貨合約</option>
                 </select>
             </div>
@@ -431,12 +437,14 @@
     });
 
     const selectElement = document.getElementById('future-select');
+    const searchInput = document.getElementById('future-search');
+    const searchDropdown = document.getElementById('search-dropdown');
     const priceInput = document.getElementById('price-input');
     const contractsInput = document.getElementById('contracts-input');
     const calculateButton = document.getElementById('calculate-button');
     const contractInfo = document.getElementById('contract-info');
 
-    // 填充下拉選單
+    // 填充隱藏的下拉選單（用於程序化選擇）
     futuresData.forEach(future => {
         const option = document.createElement('option');
         option.value = future.code;
@@ -444,12 +452,61 @@
         selectElement.appendChild(option);
     });
 
-    // 選擇期貨標的事件處理
-    selectElement.addEventListener('change', () => {
-        const selectedCode = selectElement.value;
-        const selectedFuture = futuresData.find(f => f.code === selectedCode);
+    // 搜尋功能
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+        
+        if (searchTerm.length === 0) {
+            searchDropdown.classList.add('hidden');
+            return;
+        }
+
+        // 根據搜尋詞過濾期貨
+        const filteredFutures = futuresData.filter(future => 
+            future.code.toLowerCase().includes(searchTerm) ||
+            future.name.toLowerCase().includes(searchTerm) ||
+            future.stockCode.toLowerCase().includes(searchTerm)
+        );
+
+        // 填充搜尋結果
+        if (filteredFutures.length > 0) {
+            searchDropdown.innerHTML = filteredFutures.map(future => `
+                <div class="px-4 py-2 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm" data-code="${future.code}">
+                    <div class="font-medium text-gray-900">${future.name}</div>
+                    <div class="text-xs text-gray-500">${future.code} | ${future.stockCode} | ${future.sharesPerContract} 股/口</div>
+                </div>
+            `).join('');
+            
+            searchDropdown.classList.remove('hidden');
+            
+            // 為每個結果項添加點擊事件
+            searchDropdown.querySelectorAll('div[data-code]').forEach(item => {
+                item.addEventListener('click', () => {
+                    const code = item.getAttribute('data-code');
+                    selectFuture(code);
+                    searchDropdown.classList.add('hidden');
+                });
+            });
+        } else {
+            searchDropdown.innerHTML = '<div class="px-4 py-2 text-sm text-gray-500">找不到相符的期貨合約</div>';
+            searchDropdown.classList.remove('hidden');
+        }
+    });
+
+    // 點擊其他地方隱藏下拉選單
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.lg\\:col-span-2')) {
+            searchDropdown.classList.add('hidden');
+        }
+    });
+
+    // 選擇期貨的統一函數
+    function selectFuture(code) {
+        selectElement.value = code;
+        const selectedFuture = futuresData.find(f => f.code === code);
         
         if (selectedFuture) {
+            searchInput.value = selectedFuture.name;
             contractInfo.innerHTML = `
                 <p class="font-bold text-indigo-700">${selectedFuture.name} (${selectedFuture.stockCode})</p>
                 <p class="text-xs">每口股數: ${selectedFuture.sharesPerContract} 股</p>
@@ -457,11 +514,9 @@
             `;
             // 清空結果
             resetResults();
-        } else {
-            contractInfo.textContent = '請先選擇期貨標的...';
         }
         checkInputs();
-    });
+    }
 
     // 輸入檢查和按鈕啟用/禁用邏輯
     [priceInput, contractsInput].forEach(input => {
