@@ -456,6 +456,12 @@
     searchInput.addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase().trim();
         
+        // 每次搜尋都清除先前的計算結果、價格與口數，並停用計算按鈕
+        resetResults();
+        priceInput.value = '';
+        contractsInput.value = '';
+        calculateButton.disabled = true;
+
         if (searchTerm.length === 0) {
             searchDropdown.classList.add('hidden');
             return;
