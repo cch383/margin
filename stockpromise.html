@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票期貨保證金試算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 使用 Inter 字體以獲得更好的現代感 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e0e7ff;
+        }
+        .input-field {
+            transition: all 0.2s;
+        }
+        .input-field:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        secondary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="p-4 sm:p-8 min-h-screen flex items-start justify-center">
+
+<div id="app" class="w-full max-w-4xl">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-8 text-center">
+        臺灣股票期貨保證金試算
+    </h1>
+
+    <div class="bg-white card rounded-xl p-6 sm:p-10">
+        <!-- 輸入區塊 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- 選擇標的 -->
+            <div class="lg:col-span-2">
+                <label for="future-select" class="block text-sm font-medium text-gray-700 mb-1">
+                    股票期貨標的
+                </label>
+                <select id="future-select" class="input-field mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm">
+                    <option value="">請選擇期貨合約</option>
+                </select>
+            </div>
+
+            <!-- 當前股價 -->
+            <div>
+                <label for="price-input" class="block text-sm font-medium text-gray-700 mb-1">
+                    當前股價 (元)
+                </label>
+                <input type="number" id="price-input" placeholder="例如: 100.5" class="input-field mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 sm:text-sm" step="0.01" min="0.01">
+            </div>
+
+            <!-- 交易口數 -->
+            <div>
+                <label for="contracts-input" class="block text-sm font-medium text-gray-700 mb-1">
+                    交易口數
+                </label>
+                <input type="number" id="contracts-input" placeholder="例如: 1" class="input-field mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 sm:text-sm" min="1" step="1">
+            </div>
+        </div>
+        
+        <!-- 合約資訊與計算按鈕 -->
+        <div class="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-6 mb-8 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+            <div id="contract-info" class="text-sm text-gray-600 font-medium flex-grow w-full sm:w-auto">
+                請先選擇期貨標的...
+            </div>
+            <button id="calculate-button" class="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-lg shadow-md hover:bg-secondary focus:outline-none focus:ring-4 focus:ring-indigo-300 transition duration-150 ease-in-out disabled:bg-gray-400" disabled>
+                計算保證金
+            </button>
+        </div>
+
+        <!-- 結果區塊 -->
+        <div id="results" class="space-y-4">
+            <h2 class="text-xl font-bold text-gray-900 border-b pb-2 mb-4">試算結果 (新臺幣)</h2>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- 結算保證金 -->
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <p class="text-sm font-medium text-blue-600 mb-1">結算保證金</p>
+                    <p id="settlement-margin" class="text-2xl font-extrabold text-blue-900">--</p>
+                    <p id="settlement-ratio" class="text-xs text-blue-500 mt-1">比例: --</p>
+                </div>
+
+                <!-- 維持保證金 -->
+                <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                    <p class="text-sm font-medium text-amber-600 mb-1">維持保證金</p>
+                    <p id="maintenance-margin" class="text-2xl font-extrabold text-amber-900">--</p>
+                    <p id="maintenance-ratio" class="text-xs text-amber-500 mt-1">比例: --</p>
+                </div>
+
+                <!-- 原始保證金 -->
+                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+                    <p class="text-sm font-medium text-red-600 mb-1">原始保證金</p>
+                    <p id="initial-margin" class="text-2xl font-extrabold text-red-900">--</p>
+                    <p id="initial-ratio" class="text-xs text-red-500 mt-1">比例: --</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 備註/免責聲明 -->
+        <div class="mt-8 pt-4 border-t text-sm text-gray-500">
+            <p class="font-semibold mb-1">計算備註：</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>合約規格假設：中文簡稱包含「小型」者為 100 股/口；其餘為 2,000 股/口。</li>
+                <li>此試算結果僅供參考，實際保證金金額請依期貨商公告為準。</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 股票期貨資料 (手動從使用者提供的文字中解析)
+    const futuresData = [
+        // 級距 1 (10.00% / 10.35% / 13.50%)
+        { code: 'DFF', name: '台泥期貨', stockCode: '1101', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DYF', name: '亞泥期貨', stockCode: '1102', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DZF', name: '大成期貨', stockCode: '1210', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CQF', name: '統一期貨', stockCode: '1216', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CFF', name: '台塑期貨', stockCode: '1301', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CAF', name: '南亞期貨', stockCode: '1303', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EEF', name: '國喬期貨', stockCode: '1312', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EGF', name: '中石化期貨', stockCode: '1314', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EHF', name: '東陽期貨', stockCode: '1319', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DGF', name: '台化期貨', stockCode: '1326', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CRF', name: '遠東新期貨', stockCode: '1402', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EKF', name: '南紡期貨', stockCode: '1440', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'MYF', name: '精華期貨', stockCode: '1565', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OMF', name: '小型精華期貨', stockCode: '1565', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'MAF', name: '葡萄王期貨', stockCode: '1707', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QOF', name: '長興期貨', stockCode: '1717', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EYF', name: '中纖期貨', stockCode: '1718', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'EZF', name: '台肥期貨', stockCode: '1722', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QPF', name: '正隆期貨', stockCode: '1904', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'SBF', name: '華紙期貨', stockCode: '1905', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QKF', name: '永豐餘期貨', stockCode: '1907', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OSF', name: '榮成期貨', stockCode: '1909', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CBF', name: '中鋼期貨', stockCode: '2002', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FBF', name: '東和鋼鐵期貨', stockCode: '2006', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FCF', name: '中鴻期貨', stockCode: '2014', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FEF', name: '大成鋼期貨', stockCode: '2027', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FKF', name: '正新期貨', stockCode: '2105', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FNF', name: '裕隆期貨', stockCode: '2201', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CCF', name: '聯電期貨', stockCode: '2303', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CUF', name: '中環期貨', stockCode: '2323', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CGF', name: '仁寶期貨', stockCode: '2324', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LXF', name: '國巨期貨', stockCode: '2327', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QEF', name: '小型國巨期貨', stockCode: '2327', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'CDF', name: '台積電期貨', stockCode: '2330', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QFF', name: '小型台積電期貨', stockCode: '2330', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'DIF', name: '旺宏期貨', stockCode: '2337', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'FYF', name: '台亞期貨', stockCode: '2340', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'GAF', name: '聯強期貨', stockCode: '2347', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CWF', name: '佳世達期貨', stockCode: '2352', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DSF', name: '宏碁期貨', stockCode: '2353', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'MBF', name: '敬鵬期貨', stockCode: '2355', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'GIF', name: '微星期貨', stockCode: '2377', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'GJF', name: '瑞昱期貨', stockCode: '2379', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QGF', name: '小型瑞昱期貨', stockCode: '2379', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'GKF', name: '群光期貨', stockCode: '2385', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'GMF', name: '億光期貨', stockCode: '2393', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CHF', name: '友達期貨', stockCode: '2409', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DLF', name: '中華電期貨', stockCode: '2412', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'MKF', name: '美律期貨', stockCode: '2439', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QTF', name: '超豐期貨', stockCode: '2441', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DVF', name: '聯發科期貨', stockCode: '2454', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PUF', name: '小型聯發科期貨', stockCode: '2454', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'GWF', name: '義隆期貨', stockCode: '2458', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'GXF', name: '可成期貨', stockCode: '2474', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'HHF', name: '中工期貨', stockCode: '2515', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'HLF', name: '興富發期貨', stockCode: '2542', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'HOF', name: '華固期貨', stockCode: '2548', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QCF', name: '裕民期貨', stockCode: '2606', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DBF', name: '華航期貨', stockCode: '2610', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'HSF', name: '長榮航期貨', stockCode: '2618', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PGF', name: '台灣高鐵期貨', stockCode: '2633', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DCF', name: '彰銀期貨', stockCode: '2801', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'IAF', name: '臺企銀期貨', stockCode: '2834', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CJF', name: '華南金期貨', stockCode: '2880', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CEF', name: '富邦金期貨', stockCode: '2881', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CKF', name: '國泰金期貨', stockCode: '2882', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LRF', name: '凱基金期貨', stockCode: '2883', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DNF', name: '玉山金期貨', stockCode: '2884', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DOF', name: '元大金期貨', stockCode: '2885', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CLF', name: '兆豐金期貨', stockCode: '2886', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CMF', name: '台新新光金期貨', stockCode: '2887', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DEF', name: '永豐金期貨', stockCode: '2890', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'CNF', name: '中信金期貨', stockCode: '2891', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DPF', name: '第一金期貨', stockCode: '2892', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'IHF', name: '農林期貨', stockCode: '2913', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DWF', name: '潤泰全期貨', stockCode: '2915', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'IJF', name: '大立光期貨', stockCode: '3008', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OLF', name: '小型大立光期貨', stockCode: '3008', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'IOF', name: '聯詠期貨', stockCode: '3034', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QHF', name: '小型聯詠期貨', stockCode: '3034', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'ITF', name: '晶技期貨', stockCode: '3042', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LBF', name: '健鼎期貨', stockCode: '3044', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LCF', name: '台灣大期貨', stockCode: '3045', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NBF', name: '璟德期貨', stockCode: '3152', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'IZF', name: '明泰期貨', stockCode: '3380', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'DQF', name: '群創期貨', stockCode: '3481', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QDF', name: '台勝科期貨', stockCode: '3532', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'JPF', name: '大聯大期貨', stockCode: '3702', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QBF', name: '富采期貨', stockCode: '3714', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NIF', name: '晟德期貨', stockCode: '4123', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PDF', name: '泰博期貨', stockCode: '4736', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LTF', name: '遠傳期貨', stockCode: '4904', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'JSF', name: '和碩期貨', stockCode: '4938', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LUF', name: '臻鼎-KY期貨', stockCode: '4958', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NJF', name: '榮剛期貨', stockCode: '5009', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NOF', name: '中美晶期貨', stockCode: '5483', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LVF', name: '中租-KY期貨', stockCode: '5871', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'UEF', name: '上海商銀期貨', stockCode: '5876', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LOF', name: '合庫金期貨', stockCode: '5880', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'RPF', name: '寶雅期貨', stockCode: '5904', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'RRF', name: '小型寶雅期貨', stockCode: '5904', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'JXF', name: '群益證期貨', stockCode: '6005', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OEF', name: '彩晶期貨', stockCode: '6116', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NQF', name: '新普期貨', stockCode: '6121', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'NSF', name: '頎邦期貨', stockCode: '6147', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PKF', name: '信昌電期貨', stockCode: '6173', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KAF', name: '瑞儀期貨', stockCode: '6176', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PLF', name: '合晶期貨', stockCode: '6182', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KCF', name: '力成期貨', stockCode: '6239', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'MQF', name: '矽格期貨', stockCode: '6257', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LIF', name: '台郡期貨', stockCode: '6269', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KDF', name: '同欣電期貨', stockCode: '6271', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KEF', name: '台表科期貨', stockCode: '6278', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OHF', name: '胡連期貨', stockCode: '6279', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KFF', name: '康舒期貨', stockCode: '6282', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'OQF', name: '樺漢期貨', stockCode: '6414', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'UPF', name: '保瑞期貨', stockCode: '6472', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'UQF', name: '小型保瑞期貨', stockCode: '6472', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'OWF', name: '環球晶期貨', stockCode: '6488', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PBF', name: '小型環球晶期貨', stockCode: '6488', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } }, // 小型
+        { code: 'UFF', name: '台塑化期貨', stockCode: '6505', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'PMF', name: '大江期貨', stockCode: '8436', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'SKF', name: '至上期貨', stockCode: '8112', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'QUF', name: '南茂期貨', stockCode: '8150', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KKF', name: '達方期貨', stockCode: '8163', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KLF', name: '寶成期貨', stockCode: '9904', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'LMF', name: '美利達期貨', stockCode: '9914', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'MVF', name: '百和期貨', stockCode: '9938', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KOF', name: '宏全期貨', stockCode: '9939', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+        { code: 'KPF', name: '潤泰新期貨', stockCode: '9945', ratio: { s: 0.1000, m: 0.1035, i: 0.1350 } },
+
+        // 級距 2 (12.00% / 12.42% / 16.20%)
+        { code: 'LWF', name: '儒鴻期貨', stockCode: '1476', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KSF', name: '聚陽期貨', stockCode: '1477', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SCF', name: '小型聚陽期貨', stockCode: '1477', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'SDF', name: '中興電期貨', stockCode: '1513', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'EPF', name: '亞德客-KY期貨', stockCode: '1590', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'CSF', name: '華新期貨', stockCode: '1605', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'VAF', name: '華榮期貨', stockCode: '1608', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RJF', name: '大亞期貨', stockCode: '1609', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SAF', name: '美時期貨', stockCode: '1795', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KUF', name: '台玻期貨', stockCode: '1802', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'ODF', name: '為升期貨', stockCode: '2231', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FQF', name: '光寶科期貨', stockCode: '2301', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FRF', name: '台達電期貨', stockCode: '2308', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RVF', name: '小型台達電期貨', stockCode: '2308', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'FSF', name: '金寶期貨', stockCode: '2312', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FTF', name: '華通期貨', stockCode: '2313', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'DHF', name: '鴻海期貨', stockCode: '2317', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KWF', name: '廣宇期貨', stockCode: '2328', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UXF', name: '華泰期貨', stockCode: '2329', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FVF', name: '精英期貨', stockCode: '2331', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FWF', name: '友訊期貨', stockCode: '2332', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QVF', name: '光罩期貨', stockCode: '2338', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'FZF', name: '華邦電期貨', stockCode: '2344', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'OPF', name: '智邦期貨', stockCode: '2345', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SEF', name: '小型智邦期貨', stockCode: '2345', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'GCF', name: '鴻準期貨', stockCode: '2354', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'LQF', name: '英業達期貨', stockCode: '2356', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'DJF', name: '華碩期貨', stockCode: '2357', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QRF', name: '小型華碩期貨', stockCode: '2357', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'MJF', name: '致茂期貨', stockCode: '2360', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'VDF', name: '小型致茂期貨', stockCode: '2360', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'VBF', name: '燿華期貨', stockCode: '2367', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RKF', name: '金像電期貨', stockCode: '2368', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'CXF', name: '大同期貨', stockCode: '2371', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PJF', name: '台光電期貨', stockCode: '2383', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SFF', name: '小型台光電期貨', stockCode: '2383', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'GLF', name: '正崴期貨', stockCode: '2392', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GNF', name: '凌陽期貨', stockCode: '2401', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GOF', name: '漢唐期貨', stockCode: '2404', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UZF', name: '小型漢唐期貨', stockCode: '2404', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'VCF', name: '建準期貨', stockCode: '2421', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GRF', name: '京元電子期貨', stockCode: '2449', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GVF', name: '飛宏期貨', stockCode: '2457', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GYF', name: '強茂期貨', stockCode: '2481', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'GZF', name: '兆赫期貨', stockCode: '2485', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'HAF', name: '瑞軒期貨', stockCode: '2489', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'HCF', name: '宏達電期貨', stockCode: '2498', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'HIF', name: '冠德期貨', stockCode: '2520', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'CZF', name: '長榮期貨', stockCode: '2603', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'HQF', name: '新興期貨', stockCode: '2605', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'DAF', name: '陽明期貨', stockCode: '2609', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RCF', name: '漢翔期貨', stockCode: '2634', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SJF', name: '神基期貨', stockCode: '3005', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'IIF', name: '晶豪科期貨', stockCode: '3006', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'IQF', name: '文曄期貨', stockCode: '3036', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QQF', name: '僑威期貨', stockCode: '3078', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NAF', name: '穩懋期貨', stockCode: '3105', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QIF', name: '小型穩懋期貨', stockCode: '3105', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'PAF', name: '原相期貨', stockCode: '3227', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PXF', name: '鈊象期貨', stockCode: '3293', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PYF', name: '小型鈊象期貨', stockCode: '3293', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'LEF', name: '玉晶光期貨', stockCode: '3406', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QJF', name: '小型玉晶光期貨', stockCode: '3406', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'JFF', name: '嘉澤期貨', stockCode: '3533', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RFF', name: '小型嘉澤期貨', stockCode: '3533', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'OUF', name: '同致期貨', stockCode: '3552', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'JNF', name: 'TPK-KY期貨', stockCode: '3673', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SYF', name: '家登期貨', stockCode: '3680', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'SZF', name: '小型家登期貨', stockCode: '3680', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'NGF', name: '碩禾期貨', stockCode: '3691', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PSF', name: '神達期貨', stockCode: '3706', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'OZF', name: '日月光投控期貨', stockCode: '3711', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RDF', name: '中天期貨', stockCode: '4128', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RNF', name: '合一期貨', stockCode: '4743', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'REF', name: '新唐期貨', stockCode: '4919', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NLF', name: '世界期貨', stockCode: '5347', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NMF', name: '中光電期貨', stockCode: '5371', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'RBF', name: '中磊期貨', stockCode: '5388', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PEF', name: '台半期貨', stockCode: '5425', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PPF', name: '宣德期貨', stockCode: '5457', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'JWF', name: '長虹期貨', stockCode: '5534', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'JZF', name: '嘉聯益期貨', stockCode: '6153', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KBF', name: '聯茂期貨', stockCode: '6213', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'ROF', name: '立端期貨', stockCode: '6245', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KGF', name: '啟碁期貨', stockCode: '6285', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UYF', name: '良維期貨', stockCode: '6290', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UGF', name: '達發期貨', stockCode: '6526', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UIF', name: '小型達發期貨', stockCode: '6526', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+        { code: 'QYF', name: '高端疫苗期貨', stockCode: '6547', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'UUF', name: '台灣虎航期貨', stockCode: '6757', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QZF', name: '力積電期貨', stockCode: '6770', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'KIF', name: '台虹期貨', stockCode: '8039', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NUF', name: '網家期貨', stockCode: '8044', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NVF', name: '元太期貨', stockCode: '8069', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'PRF', name: '宏捷科期貨', stockCode: '8086', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'NWF', name: '群聯期貨', stockCode: '8299', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } },
+        { code: 'QNF', name: '小型群聯期貨', stockCode: '8299', ratio: { s: 0.1200, m: 0.1242, i: 0.1620 } }, // 小型
+
+        // 級距 3 (15.00% / 15.53% / 20.25%)
+        { code: 'UAF', name: '士電期貨', stockCode: '1503', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'EMF', name: '東元期貨', stockCode: '1504', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'ORF', name: '和大期貨', stockCode: '1536', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'FFF', name: '上銀期貨', stockCode: '2049', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'QMF', name: '小型上銀期貨', stockCode: '2049', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'FGF', name: '川湖期貨', stockCode: '2059', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'SVF', name: '小型川湖期貨', stockCode: '2059', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'GHF', name: '技嘉期貨', stockCode: '2376', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'SLF', name: '小型技嘉期貨', stockCode: '2376', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'DKF', name: '廣達期貨', stockCode: '2382', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'QWF', name: '威盛期貨', stockCode: '2388', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'CYF', name: '南亞科期貨', stockCode: '2408', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'GUF', name: '全新期貨', stockCode: '2455', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UTF', name: '一詮期貨', stockCode: '2486', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'QXF', name: '萬海期貨', stockCode: '2615', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'RAF', name: '奇鋐期貨', stockCode: '3017', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UHF', name: '小型奇鋐期貨', stockCode: '3017', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'IMF', name: '亞光期貨', stockCode: '3019', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'IPF', name: '智原期貨', stockCode: '3035', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'IRF', name: '欣興期貨', stockCode: '3037', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'IXF', name: '景碩期貨', stockCode: '3189', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'DXF', name: '緯創期貨', stockCode: '3231', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'NDF', name: '威剛期貨', stockCode: '3260', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'PTF', name: '雙鴻期貨', stockCode: '3324', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'ULF', name: '小型雙鴻期貨', stockCode: '3324', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'QLF', name: '精材期貨', stockCode: '3374', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'IYF', name: '新日興期貨', stockCode: '3376', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'JBF', name: '創意期貨', stockCode: '3443', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'RWF', name: '小型創意期貨', stockCode: '3443', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'PIF', name: '力旺期貨', stockCode: '3529', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'RSF', name: '小型力旺期貨', stockCode: '3529', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'JMF', name: '健策期貨', stockCode: '3653', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'RGF', name: '小型健策期貨', stockCode: '3653', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'UMF', name: '世芯-KY期貨', stockCode: '3661', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UOF', name: '小型世芯-KY期貨', stockCode: '3661', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'PCF', name: '智擎期貨', stockCode: '4162', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'PHF', name: '祥碩期貨', stockCode: '5269', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'PNF', name: '小型祥碩期貨', stockCode: '5269', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'PZF', name: '信驊期貨', stockCode: '5274', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'QAF', name: '小型信驊期貨', stockCode: '5274', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'UBF', name: '亞翔期貨', stockCode: '6139', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UCF', name: '廣明期貨', stockCode: '6188', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UVF', name: '旺矽期貨', stockCode: '6223', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'UWF', name: '小型旺矽期貨', stockCode: '6223', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'OVF', name: '台燿期貨', stockCode: '6274', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'OXF', name: '精測期貨', stockCode: '6510', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'OYF', name: '小型精測期貨', stockCode: '6510', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'PVF', name: '緯穎期貨', stockCode: '6669', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'PWF', name: '小型緯穎期貨', stockCode: '6669', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'LYF', name: '南電期貨', stockCode: '8046', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'QSF', name: '小型南電期貨', stockCode: '8046', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+        { code: 'RUF', name: '世紀鋼期貨', stockCode: '9958', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } },
+        { code: 'SWF', name: '小型世紀鋼期貨', stockCode: '9958', ratio: { s: 0.1500, m: 0.1553, i: 0.2025 } }, // 小型
+
+        // 特殊比例 (非級距 1, 2, 3)
+        { code: 'OTF', name: '聯亞期貨', stockCode: '3081', ratio: { s: 0.1600, m: 0.1656, i: 0.2160 } },
+        { code: 'RLF', name: '元晶期貨', stockCode: '6443', ratio: { s: 0.1800, m: 0.1863, i: 0.2430 } },
+        { code: 'PQF', name: '金居期貨', stockCode: '8358', ratio: { s: 0.2400, m: 0.2484, i: 0.3240 } },
+    ];
+
+    // 檢查是否為小型合約並設定股數/口
+    futuresData.forEach(future => {
+        // 假設：中文簡稱中包含 '小型' 視為 100 股/口，否則為 2000 股/口 (TAIFEX標準)
+        future.sharesPerContract = future.name.includes('小型') ? 100 : 2000;
+        
+        // 為了在 UI 顯示比例，將小數轉換回百分比字串
+        future.ratioDisplay = {
+            s: (future.ratio.s * 100).toFixed(2) + '%',
+            m: (future.ratio.m * 100).toFixed(2) + '%',
+            i: (future.ratio.i * 100).toFixed(2) + '%',
+        };
+    });
+
+    const selectElement = document.getElementById('future-select');
+    const priceInput = document.getElementById('price-input');
+    const contractsInput = document.getElementById('contracts-input');
+    const calculateButton = document.getElementById('calculate-button');
+    const contractInfo = document.getElementById('contract-info');
+
+    // 填充下拉選單
+    futuresData.forEach(future => {
+        const option = document.createElement('option');
+        option.value = future.code;
+        option.textContent = `${future.name} (${future.stockCode} / ${future.sharesPerContract} 股/口)`;
+        selectElement.appendChild(option);
+    });
+
+    // 選擇期貨標的事件處理
+    selectElement.addEventListener('change', () => {
+        const selectedCode = selectElement.value;
+        const selectedFuture = futuresData.find(f => f.code === selectedCode);
+        
+        if (selectedFuture) {
+            contractInfo.innerHTML = `
+                <p class="font-bold text-indigo-700">${selectedFuture.name} (${selectedFuture.stockCode})</p>
+                <p class="text-xs">每口股數: ${selectedFuture.sharesPerContract} 股</p>
+                <p class="text-xs">原始比例: ${selectedFuture.ratioDisplay.i} | 維持比例: ${selectedFuture.ratioDisplay.m} | 結算比例: ${selectedFuture.ratioDisplay.s}</p>
+            `;
+            // 清空結果
+            resetResults();
+        } else {
+            contractInfo.textContent = '請先選擇期貨標的...';
+        }
+        checkInputs();
+    });
+
+    // 輸入檢查和按鈕啟用/禁用邏輯
+    [priceInput, contractsInput].forEach(input => {
+        input.addEventListener('input', checkInputs);
+    });
+
+    function checkInputs() {
+        const selectedCode = selectElement.value;
+        const price = parseFloat(priceInput.value);
+        const contracts = parseInt(contractsInput.value);
+        
+        // 必須選擇標的，且價格 > 0，口數 >= 1
+        const isValid = selectedCode && price > 0 && contracts >= 1;
+        calculateButton.disabled = !isValid;
+    }
+
+    // 計算邏輯
+    calculateButton.addEventListener('click', calculateMargin);
+
+    function calculateMargin() {
+        const selectedCode = selectElement.value;
+        const price = parseFloat(priceInput.value);
+        const contracts = parseInt(contractsInput.value);
+
+        if (!selectedCode || price <= 0 || contracts < 1) {
+            console.error("無效的輸入或未選擇標的");
+            return;
+        }
+
+        const future = futuresData.find(f => f.code === selectedCode);
+        if (!future) return;
+
+        // 計算基礎：股價 * 每口股數 * 口數
+        const contractValue = price * future.sharesPerContract * contracts;
+        
+        // 計算各項保證金
+        const settlementMargin = contractValue * future.ratio.s;
+        const maintenanceMargin = contractValue * future.ratio.m;
+        const initialMargin = contractValue * future.ratio.i;
+
+        // 格式化為新臺幣並更新結果
+        const formatter = new Intl.NumberFormat('zh-TW', {
+            style: 'currency',
+            currency: 'TWD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        });
+
+        document.getElementById('settlement-margin').textContent = formatter.format(settlementMargin);
+        document.getElementById('maintenance-margin').textContent = formatter.format(maintenanceMargin);
+        document.getElementById('initial-margin').textContent = formatter.format(initialMargin);
+
+        // 更新比例顯示
+        document.getElementById('settlement-ratio').textContent = `比例: ${future.ratioDisplay.s}`;
+        document.getElementById('maintenance-ratio').textContent = `比例: ${future.ratioDisplay.m}`;
+        document.getElementById('initial-ratio').textContent = `比例: ${future.ratioDisplay.i}`;
+    }
+
+    // 清空結果顯示
+    function resetResults() {
+        document.getElementById('settlement-margin').textContent = '--';
+        document.getElementById('maintenance-margin').textContent = '--';
+        document.getElementById('initial-margin').textContent = '--';
+        document.getElementById('settlement-ratio').textContent = '比例: --';
+        document.getElementById('maintenance-ratio').textContent = '比例: --';
+        document.getElementById('initial-ratio').textContent = '比例: --';
+    }
+
+    // 確保初始化時結果為空
+    resetResults();
+
+</script>
+</body>
+</html>
